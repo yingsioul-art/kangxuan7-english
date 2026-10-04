@@ -146,6 +146,11 @@ th:first-child,td:first-child{white-space:nowrap}
 .chips .opt{padding:8px 16px}
 .dropzone{background:var(--surface-2);border-radius:var(--r-md);padding:8px;margin:16px 0 8px;min-height:64px;align-items:center}
 .dropzone .opt{background:var(--surface);box-shadow:var(--sh-1);border-color:transparent}
+.dropzone.over{outline:2px dashed var(--accent);outline-offset:2px}
+.drag{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.dropzone .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
+.dropzone .opt.ng{border-color:var(--ng);background:var(--ng-soft)}
+.ghost{position:fixed;z-index:50;pointer-events:none;margin:0;transform:scale(1.08);box-shadow:var(--sh-2);background:var(--surface)!important;opacity:.95}
 
 /* 作答 */
 .q{font-size:19px;line-height:1.7;font-weight:500}
@@ -478,24 +483,63 @@ function qOrder(q, box){
     "children.":"childs.",women:"womans",men:"mans","cousins.":"cousin.","doctors.":"doctor."};
   const dis = shuffle(toks.filter(t=>CONF[t] && !toks.includes(CONF[t])).map(t=>CONF[t])).slice(0,2);
   let pool = shuffle(toks.concat(dis).map((t,i)=>({t,i}))), ans=[];
-  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：點字卡排出正確順序（可能有多出來的干擾卡）</div>
+  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：把字卡<b>拖曳</b>（或點一下）到上方排出句子；在上方也能拖曳換位置。可能有多出來的干擾卡。</div>
     <div class="chips dropzone" id="ansrow"></div><div class="chips" id="poolrow"></div>
     <button class="btn" id="chk">檢查順序</button><div id="ph2"></div>`;
+  let locked=false;
   const draw=()=>{
-    $("#ansrow").innerHTML = ans.map((o,k)=>`<button class="chipw opt" data-k="${k}">${esc(o.t)}</button>`).join("") || `<span class="muted">（點下面的字卡）</span>`;
-    $("#poolrow").innerHTML = pool.map((o,k)=>`<button class="chipw opt" data-k="${k}">${esc(o.t)}</button>`).join("");
-    $("#ansrow").querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{ pool.push(ans.splice(+b.dataset.k,1)[0]); draw(); });
-    $("#poolrow").querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{ ans.push(pool.splice(+b.dataset.k,1)[0]); draw(); });
+    $("#ansrow").innerHTML = ans.map((o,k)=>`<button class="chipw opt drag" data-row="ans" data-k="${k}">${esc(o.t)}</button>`).join("") || `<span class="muted">（把字卡拖到這裡）</span>`;
+    const pr=$("#poolrow"); if (pr) pr.innerHTML = pool.map((o,k)=>`<button class="chipw opt drag" data-row="pool" data-k="${k}">${esc(o.t)}</button>`).join("");
   };
+  // 拖曳（滑鼠＋觸控共用 Pointer Events）；移動不到 6px 視為點一下
+  const insertIndex=(row, x, y)=>{
+    const cs=[...row.querySelectorAll(".drag")];
+    for (let i=0;i<cs.length;i++){ const r=cs[i].getBoundingClientRect();
+      if (y < r.top) return i;
+      if (y <= r.bottom && x < r.left + r.width/2) return i; }
+    return cs.length;
+  };
+  box.addEventListener("pointerdown", e=>{
+    const c=e.target.closest(".drag"); if(!c || locked) return;
+    e.preventDefault();
+    const from=c.dataset.row, k=+c.dataset.k, sx=e.clientX, sy=e.clientY;
+    let ghost=null;
+    const move=ev=>{
+      if (!ghost && Math.hypot(ev.clientX-sx, ev.clientY-sy) > 6){
+        ghost=c.cloneNode(true); ghost.classList.add("ghost"); document.body.appendChild(ghost); c.style.opacity=".3";
+      }
+      if (ghost){ ghost.style.left=(ev.clientX-ghost.offsetWidth/2)+"px"; ghost.style.top=(ev.clientY-ghost.offsetHeight/2)+"px";
+        $("#ansrow").classList.toggle("over", !!document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("#ansrow")); }
+    };
+    const up=ev=>{
+      document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up);
+      $("#ansrow").classList.remove("over");
+      const src = from==="ans" ? ans : pool;
+      if (!ghost){ // 點一下：在兩列之間移動
+        (from==="ans"?pool:ans).push(src.splice(k,1)[0]); return draw();
+      }
+      ghost.remove();
+      const el=document.elementFromPoint(ev.clientX, ev.clientY);
+      const toAns=el && el.closest("#ansrow"), toPool=el && el.closest("#poolrow");
+      if (toAns){ let idx=insertIndex($("#ansrow"), ev.clientX, ev.clientY); const item=src.splice(k,1)[0];
+        if (from==="ans" && idx>k) idx--; ans.splice(idx,0,item); }
+      else if (toPool && from==="ans"){ pool.push(ans.splice(k,1)[0]); }
+      draw();
+    };
+    document.addEventListener("pointermove", move); document.addEventListener("pointerup", up);
+  });
   draw();
   $("#chk").onclick=()=>{
-    if (ans.length !== toks.length) return;
-    const good = ans.map(o=>o.t).join(" ")===q.en;
+    const got=ans.map(o=>o.t), good = got.join(" ")===q.en, done = got.length===toks.length;
     if (!good){
       tries++; phase1ok=false;
-      if (tries<2){ $("#ph2").innerHTML=`<div class="fb ng">順序還不對，想想 be 動詞和形容詞的位置，再試一次。</div>`; return; }
-      $("#ph2").innerHTML=`<div class="fb ng">正確順序：<b>${esc(q.en)}</b></div>`;
+      // 標出排對位置的字卡
+      $("#ansrow").querySelectorAll(".drag").forEach((b,i)=>b.classList.add(got[i]===toks[i]?"ok":"ng"));
+      if (done && tries<2){ $("#ph2").innerHTML=`<div class="fb ng">綠色的位置對了，紅色的還不對。想想 be 動詞和形容詞的位置，再試一次。</div>`;
+        setTimeout(()=>$("#ansrow").querySelectorAll(".drag").forEach(b=>b.classList.remove("ok","ng")),1500); return; }
+      $("#ph2").innerHTML=`<div class="fb ng">${done?"":"還沒排完也可以對答案。"}${got.length?"綠色是排對的位置。":""}正確順序：<b>${esc(q.en)}</b></div>`;
     }
+    locked=true;
     $("#chk").remove(); $("#poolrow").remove();
     $("#ph2").insertAdjacentHTML("beforeend", `<div class="sub" style="margin-top:16px">第 2 步：${good?"排對了！":""}現在不看字卡，自己打出完整句子（注意大小寫和標點）</div>
       <input class="ans" id="in" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="go">確認</button>`);
