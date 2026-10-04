@@ -511,7 +511,7 @@ const PHRASES = [
   ["food chain","食物鏈",""], ["only about","只有大約",""], ["thank you","謝謝你",""],
 ];
 const ROLE = {S:["主詞","r-s"], V:["be 動詞","r-v"], NOT:["否定","r-not"], C:["補語","r-c"], WH:["疑問詞","r-wh"],
-  CJ:["連接詞","r-cj"], PH:["片語","r-ph"], O:["受詞・地點","r-c"], VV:["一般動詞","r-v"], ANS:["回答詞","r-cj"]};
+  CJ:["連接詞","r-cj"], PH:["片語","r-ph"], O:["受詞・地點","r-c"], VV:["一般動詞","r-v"], ANS:["回答詞","r-cj"], ADV:["也（副詞）","r-wh"]};
 const BE = new Set(["am","is","are"]);
 const PRON = new Set(["i","you","he","she","it","we","they","this","that","these","those"]);
 const DETS = new Set(["my","your","his","her","its","our","their","the","this","that","these","those"]);
@@ -541,8 +541,16 @@ function chunk(arr, role){ return arr.length ? [{t:arr.map(x=>x.t+(x.p&&x.p!==".
 function isAdj(t){ const e=wmap()[t.toLowerCase()]; return e && e.w.pos==="adj."; }
 function analyzeClause(T){
   const lo=i=>(T[i]?T[i].t.toLowerCase():"");
-  let ch=[], i=0;
+  let ch=[], tail=[];
+  if (["and","but","or"].includes(lo(0))){ ch.push(...chunk([T[0]],"CJ")); T=T.slice(1); }
   if ((lo(0)==="yes"||lo(0)==="no") && T[0].p===","){ ch.push(...chunk([T[0]],"ANS")); T=T.slice(1); }
+  // 句尾 , too（也）獨立標出
+  if (T.length>1 && lo(T.length-1)==="too" && T[T.length-2].p===","){ tail=[{t:"too",role:"ADV"}]; T=T.slice(0,-1); }
+  const res = analyzeCore(T, ch);
+  return res.concat(tail);
+}
+function analyzeCore(T, ch){
+  const lo=i=>(T[i]?T[i].t.toLowerCase():"");
   if (lo(0)==="no" && lo(1)==="wonder"){ ch.push(...chunk(T.slice(0,2),"PH")); T=T.slice(2); }
   if (lo(0)==="what" && lo(1)==="about"){ return ch.concat(chunk(T.slice(0,2),"PH"), chunk(T.slice(2),"O")); }
   const L=k=>(T[k]?T[k].t.toLowerCase():"");
@@ -578,8 +586,11 @@ function analyzeClause(T){
   return ch.concat(chunk(T,"PH"));
 }
 function sentenceType(s){
-  const t=s.trim(), first=t.split(/\s+/)[0].toLowerCase().replace(/[,.?!]/g,"");
+  const t=s.trim(), first=t.split(/\s+/)[0].toLowerCase().replace(/[,.?!]/g,"").replace(/’/g,"'").replace(/'s$/,"");
+  const bare=t.toLowerCase().replace(/[,.?!]/g,"").trim();
+  if (PHRASES.some(p=>p[0]===bare) || /^nice to meet you/.test(bare)) return ["慣用語","整句當一個單位背，不拆文法；記住對方會怎麼回你。"];
   if (/\?$/.test(t)){
+    if (/^what about/.test(bare)) return ["片語問句","What about…? 把問題丟回去：……呢？後面接名詞。"];
     if (["who","what","how"].includes(first)) return ["Wh- 問句","疑問詞放句首，後面接「be 動詞＋主詞」。回答直接說答案，<b>不能用 Yes／No</b>。"];
     if (first==="aren't"||first==="isn't") return ["否定問句","Aren't／Isn't 開頭＝「難道不是……嗎？」。回答<b>只看事實</b>：是 → Yes, … are.；不是 → No, … aren't."];
     if (/\bor\b/i.test(t)) return ["選擇問句","有 <b>or</b>＝二選一，回答要說出選哪一個，不能用 Yes／No。"];
@@ -594,7 +605,7 @@ function sentenceType(s){
 }
 function explainHTML(en, zh){
   if (!en) return "";
-  const sentences = en.match(/[^.?!]+[.?!]?/g).map(s=>s.trim()).filter(Boolean);
+  const sentences = en.split(/(?<=[.?!])\s+/).map(s=>s.trim()).filter(Boolean);   // 2.75 的小數點不切
   const notes=new Set(), lower=en.toLowerCase().replace(/’/g,"'");
   let html="";
   sentences.forEach(s=>{
