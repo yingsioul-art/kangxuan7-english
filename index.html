@@ -157,6 +157,9 @@ th:first-child,td:first-child{white-space:nowrap}
 .wbi.ok{border-color:var(--ok);background:var(--ok-soft)}
 .wbi.ng{border-color:var(--ng);background:var(--ng-soft)}
 .wbp{font-size:20px;font-weight:700;padding-bottom:6px}
+.verdict{margin-top:16px;padding:12px 16px;border-radius:var(--r-md);font-size:20px;font-weight:700}
+.verdict.ok{background:var(--ok-soft);color:var(--ok);border:2px solid var(--ok)}
+.verdict.ng{background:var(--ng-soft);color:var(--ng);border:2px solid var(--ng)}
 /* 學生答案逐字母比對 */
 .yours{margin-top:8px;font-size:18px;line-height:1.9}
 .ya{margin:16px 0 8px;border-radius:var(--r-md);overflow:hidden;border:2px solid var(--line);background:var(--surface)}
@@ -713,7 +716,7 @@ function qOrder(q, box){
   let pool = shuffle(toks.concat(dis).map((t,i)=>({t,i}))), ans=[];
   box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：把字卡<b>拖曳</b>（或點一下）到上方排出句子；在上方也能拖曳換位置。可能有多出來的干擾卡。</div>
     <div class="chips dropzone" id="ansrow"></div><div class="chips" id="poolrow"></div>
-    <button class="btn" id="chk">檢查順序</button><div id="ph2"></div>`;
+    <div id="p1fb"></div><div class="row" id="p1btns"><button class="btn" id="chk">送出</button></div><div id="ph2"></div>`;
   let locked=false;
   const draw=()=>{
     $("#ansrow").innerHTML = ans.map((o,k)=>`<button class="chipw opt drag" data-row="ans" data-k="${k}">${esc(o.t)}</button>`).join("") || `<span class="muted">（把字卡拖到這裡）</span>`;
@@ -757,24 +760,45 @@ function qOrder(q, box){
     document.addEventListener("pointermove", move); document.addEventListener("pointerup", up);
   });
   draw();
+  // 送出：顯示答對／答錯；答錯附說明，學生修改後可以再送出，排對才進第 2 步
   $("#chk").onclick=()=>{
     const got=ans.map(o=>o.t), good = got.join(" ")===q.en, done = got.length===toks.length;
-    if (!good){
-      tries++; phase1ok=false;
-      // 標出排對位置的字卡
-      $("#ansrow").querySelectorAll(".drag").forEach((b,i)=>b.classList.add(got[i]===toks[i]?"ok":"ng"));
-      if (done && tries<2){ $("#ph2").innerHTML=`<div class="fb ng">綠色的位置對了，紅色的還不對。想想 be 動詞和形容詞的位置，再試一次。</div>`;
-        setTimeout(()=>$("#ansrow").querySelectorAll(".drag").forEach(b=>b.classList.remove("ok","ng")),1500); return; }
-      $("#ph2").innerHTML=`<div class="fb ng">${done?"":"還沒排完也可以對答案。"}${got.length?"綠色是排對的位置。":""}正確順序：<b>${esc(q.en)}</b></div>`;
+    if (good){
+      locked=true;
+      $("#ansrow").querySelectorAll(".drag").forEach(b=>b.classList.add("ok"));
+      $("#p1fb").innerHTML=`<div class="verdict ok">✅ 答對了！順序完全正確。</div>`;
+      $("#p1btns").innerHTML=`<button class="btn" id="nx1">下一步：自己打出句子 →</button>`;
+      $("#nx1").onclick=startPhase2; return;
     }
-    locked=true;
-    $("#chk").remove(); $("#poolrow").remove();
+    tries++; phase1ok=false;
+    $("#ansrow").querySelectorAll(".drag").forEach((b,i)=>b.classList.add(got[i]===toks[i]?"ok":"ng"));
+    const why=[], nOk=got.filter((t,i)=>t===toks[i]).length;
+    if (!got.length) why.push("還沒有排任何字卡。先把字卡拖到上面的框框裡。");
+    else {
+      if (nOk) why.push(`有 ${nOk} 張的位置對了（綠色）。`);
+      if (!done) why.push(`還有 <b>${toks.length-got.filter(t=>toks.includes(t)).length}</b> 張該用的字卡沒排進去。`);
+      got.filter(t=>!toks.includes(t)).forEach(d=>{ const c=toks.find(t=>CONF[t]===d); why.push(confReason(c, d)); });
+      const i=got.findIndex((t,k)=>t!==toks[k] && toks.includes(t));
+      if (i>=0) why.push(`第 <b>${i+1}</b> 個位置不對：這裡應該放一個「<b>${roleOf(toks[i])}</b>」。`);
+      else if (got.length<toks.length && got.every((t,k)=>t===toks[k])) why.push(`前面都對了，接下來第 <b>${got.length+1}</b> 個應該放一個「<b>${roleOf(toks[got.length])}</b>」。`);
+    }
+    const [tn, tr]=sentenceType(q.en);
+    why.push(`這句是「${tn}」：${tr}`);
+    $("#p1fb").innerHTML=`<div class="verdict ng">❌ 答錯了（第 ${tries} 次）</div>
+      <div class="fb ng" style="margin-top:8px">${why.map(x=>`<div>・${x}</div>`).join("")}<div style="margin-top:8px"><b>把紅色的字卡拖曳調整好，再按「送出」。</b></div></div>`;
+    if (tries>=3 && !$("#peek")){
+      $("#p1btns").insertAdjacentHTML("beforeend", `<button class="btn ghost" id="peek">👀 看正確順序</button>`);
+      $("#peek").onclick=()=>{ $("#p1fb").insertAdjacentHTML("beforeend", `<div class="fb warn reveal">正確順序：<b>${esc(q.en)}</b>　照著排好再按送出。</div>`); $("#peek").remove(); };
+    }
+  };
+  function startPhase2(){
+    const good = tries===0;
+    $("#p1btns").remove(); $("#poolrow").remove();
     // 第 2 步：一個字一個空格（格子長短＝字的長短），標點已經印好；空白鍵、Enter 都不會跳格或送出，只有按「送出」才批改
     const words = q.en.split(" ").map(w=>{ const m=w.match(/^(.*?)([,.?!]*)$/); return {core:m[1], p:m[2]}; });
     // 第 1 步顯示過的正確順序先模糊，避免直接照抄；點一下可以偷看
-    const p1=$("#ph2").firstElementChild;
-    if (p1){ p1.style.filter="blur(6px)"; p1.style.cursor="pointer"; p1.title="點一下偷看";
-      p1.onclick=()=>{ p1.style.filter = p1.style.filter ? "" : "blur(6px)"; }; }
+    box.querySelectorAll(".reveal").forEach(p1=>{ p1.style.filter="blur(6px)"; p1.style.cursor="pointer"; p1.title="點一下偷看";
+      p1.onclick=()=>{ p1.style.filter = p1.style.filter ? "" : "blur(6px)"; }; });
     $("#ph2").insertAdjacentHTML("beforeend", `<div class="sub" style="margin-top:16px">第 2 步：${good?"排對了！":""}不看字卡，在每個空格打一個字（注意大寫）。打完按「送出」。</div>
       <div class="wb" id="wb">${words.map((w,i)=>`<span class="wbw"><input class="wbi" data-i="${i}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
         style="width:calc(${Math.max(2,w.core.length)}ch + 24px)"><span class="wbp">${esc(w.p)}</span></span>`).join("")}</div>
@@ -814,7 +838,33 @@ function qOrder(q, box){
       afterAnswer(q, m, box, `${firstOk?"":"練到正確了！第一次答錯，已收進錯題本。"}${yourAnswer(v, q.en, true)}${q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.x?"<br>"+q.x:""}${extra}${explainHTML(q.en, zh)}`, v);
     };
     $("#go").onclick=go;
-  };
+  }
+}
+// 排句子答錯時，說明「這個位置應該放哪一種字」（不直接講答案）
+function roleOf(token){
+  const t=String(token||"").replace(/[,.?!]/g,""), lo=t.toLowerCase().replace(/’/g,"'");
+  if (["am","is","are","isn't","aren't"].includes(lo)) return "be 動詞";
+  if (["who","what","how","who's","what's"].includes(lo)) return "疑問詞";
+  if (/^(i'm|he's|she's|it's|that's|you're|we're|they're)$/.test(lo)) return "主詞＋be 動詞（縮寫）";
+  if (["i","you","he","she","it","we","they","this","that","these","those"].includes(lo)) return "主詞（代名詞）";
+  if (["my","your","his","her","its","our","their"].includes(lo) || /'s$|s'$/.test(lo)) return "所有格（誰的）";
+  if (["a","an","the"].includes(lo)) return "冠詞（a／an／the）";
+  if (["and","but","or"].includes(lo)) return "連接詞";
+  if (lo==="not") return "not（否定）";
+  if (lo==="too") return "too（也）";
+  if (/^\d/.test(lo)) return "數字";
+  const e=wmap()[lo];
+  if (e) return {"n.":"名詞","adj.":"形容詞","v.":"動詞","adv.":"副詞","conj.":"連接詞","pron.":"代名詞"}[e.w.pos] || "字";
+  if (/^[A-Z]/.test(t)) return "人名或專有名詞";
+  return "字";
+}
+function confReason(c, d){
+  const lc=String(c||"").toLowerCase(), ld=String(d).toLowerCase();
+  if (["is","are","am","isn't","aren't"].includes(ld)) return `干擾卡「<b>${esc(d)}</b>」不對：be 動詞要跟主詞搭配（I → am；he、she、it、單數名詞 → is；you、we、they、複數名詞 → are）。`;
+  if (["a","an"].includes(ld)) return `干擾卡「<b>${esc(d)}</b>」不對：看<b>緊接在後面那個字</b>的發音，母音開頭用 an，子音開頭用 a。`;
+  if (["he","his","she","her","they","their"].includes(ld)) return `干擾卡「<b>${esc(d)}</b>」不對：當主詞（後面接 be 動詞）用 he／she／they；後面接名詞要用所有格 his／her／their。`;
+  if (["who","what"].includes(ld)) return `干擾卡「<b>${esc(d)}</b>」不對：問「人」用 Who，問「東西、名字」用 What。`;
+  return `干擾卡「<b>${esc(d)}</b>」不對：注意單複數和特殊複數的拼法（children、women、men 不加 s；兩個以上要用複數）。`;
 }
 function qListen(q, box){
   const kind = {pic:"辨識句意", word:"聽音辨字", resp:"基本問答", talk:"言談理解"}[q.kind];
