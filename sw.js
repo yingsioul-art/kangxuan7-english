@@ -1,5 +1,5 @@
 // 網路優先：有網路就拿最新版並更新快取，沒網路才用快取（離線可練）
-const CACHE = "k7v2-20261004124447";
+const CACHE = "k7v2-20261004124647";
 const FILES = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); });
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

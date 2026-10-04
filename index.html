@@ -144,6 +144,8 @@ th:first-child,td:first-child{white-space:nowrap}
 .opt.ng{border-color:var(--ng);background:var(--ng-soft)}
 .opt:disabled{cursor:default}
 .chips .opt{padding:8px 16px}
+.dropzone{background:var(--surface-2);border-radius:var(--r-md);padding:8px;margin:16px 0 8px;min-height:64px;align-items:center}
+.dropzone .opt{background:var(--surface);box-shadow:var(--sh-1);border-color:transparent}
 
 /* 作答 */
 .q{font-size:19px;line-height:1.7;font-weight:500}
@@ -464,9 +466,14 @@ function mechCheck(v){
 }
 function qOrder(q, box){
   const toks = q.en.split(" "); let tries=0, phase1ok=true;
-  let pool = shuffle(toks.map((t,i)=>({t,i}))), ans=[];
-  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：點字卡排出正確順序</div>
-    <div class="chips card" id="ansrow" style="margin:8px 0"></div><div class="chips" id="poolrow"></div>
+  // 干擾字卡：考點字（be 動詞、冠詞、所有格、特殊複數…）各配一張易混淆的字，最多 2 張
+  const CONF = {is:"are",are:"is",am:"is",a:"an",an:"a",He:"His",His:"He",his:"he",She:"Her",Her:"She",her:"she",
+    They:"Their",Their:"They",their:"they","isn't":"aren't","aren't":"isn't",Who:"What",Is:"Are",Are:"Is",
+    "children.":"childs.",women:"womans",men:"mans","cousins.":"cousin.","doctors.":"doctor."};
+  const dis = shuffle(toks.filter(t=>CONF[t] && !toks.includes(CONF[t])).map(t=>CONF[t])).slice(0,2);
+  let pool = shuffle(toks.concat(dis).map((t,i)=>({t,i}))), ans=[];
+  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：點字卡排出正確順序（有 1–2 張是多出來的干擾卡）</div>
+    <div class="chips dropzone" id="ansrow"></div><div class="chips" id="poolrow"></div>
     <button class="btn" id="chk">檢查順序</button><div id="ph2"></div>`;
   const draw=()=>{
     $("#ansrow").innerHTML = ans.map((o,k)=>`<button class="chipw opt" data-k="${k}">${esc(o.t)}</button>`).join("") || `<span class="muted">（點下面的字卡）</span>`;
@@ -476,7 +483,7 @@ function qOrder(q, box){
   };
   draw();
   $("#chk").onclick=()=>{
-    if (pool.length) return;
+    if (ans.length !== toks.length) return;
     const good = ans.map(o=>o.t).join(" ")===q.en;
     if (!good){
       tries++; phase1ok=false;
