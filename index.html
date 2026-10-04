@@ -496,10 +496,11 @@ function yourAnswer(got, want, ok){
 }
 function blankify(s){ return s.replace(/___/g,'<span class="blank">&nbsp;</span>'); }
 function qFill(q, box){
-  box.innerHTML = passageHTML(q)+`<div class="q">${blankify(q.q)}</div><input class="ans" id="in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="在這裡輸入"><button class="btn" id="go">確認</button>`;
+  box.innerHTML = passageHTML(q)+`<div class="q">${blankify(q.q)}</div><input class="ans" id="in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在這裡輸入"><div id="f-msg"></div><button class="btn" id="go">送出答案</button>`;
   const inp=$("#in"); inp.focus();
   const go=()=>{
-    const v=inp.value; if(!v.trim()) return; inp.disabled=true; $("#go").remove();
+    const v=inp.value; if(!v.trim()){ $("#f-msg").innerHTML=`<div class="fb warn">先打出答案，再按「送出答案」。</div>`; return; }
+    inp.disabled=true; $("#go").remove(); $("#f-msg").remove();
     const kp = q.c.includes("POSS");
     const hit = q.a.find(a=>same(a, v, kp));
     const ok = !!hit;
@@ -512,31 +513,38 @@ function qFill(q, box){
     const fs = q.set==="hand" ? fillSentence(q) : null;
     afterAnswer(q, m, box, `${yourAnswer(v, hit||q.a[0], ok)}${q.x||""}${extra}${fs?explainHTML(fs.en, fs.zh):""}`, v);
   };
-  $("#go").onclick=go; inp.onkeydown=e=>{ if(e.key==="Enter") go(); };
+  $("#go").onclick=go; inp.onkeydown=e=>{ if(e.key==="Enter") e.preventDefault(); };   // 只用「送出答案」按鈕送出
 }
 function qSpell(q, box){
   const w=q.w, res={};
-  let same = ALLW.filter(x=>x.zh!==w.zh && x.sec===w.sec);
-  if (same.length<3) same = ALLW.filter(x=>x.zh!==w.zh);
-  const zhOpts = shuffle([w.zh, ...pick(same,3).map(x=>x.zh)]);
-  box.innerHTML = `<div class="sub">聽發音，打出英文拼字</div><div class="row" style="margin:16px 0"><button class="btn" id="play">🔊 播放</button><button class="btn ghost small" id="slow">🐢 慢速</button></div>
-    <input class="ans" id="in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="英文拼字"><button class="btn" id="go">確認拼字</button><div id="st2"></div>`;
+  // 🔴 這裡的干擾選項不能叫 same（會蓋掉全域比對函式 same()）
+  let others = ALLW.filter(x=>x.zh!==w.zh && x.sec===w.sec);
+  if (others.length<3) others = ALLW.filter(x=>x.zh!==w.zh);
+  const zhOpts = shuffle([w.zh, ...pick(others,3).map(x=>x.zh)]);
+  box.innerHTML = `<div class="sub">第 1 步：聽發音，打出英文拼字，再按「送出答案」</div><div class="row" style="margin:16px 0"><button class="btn" id="play">🔊 播放</button><button class="btn ghost small" id="slow">🐢 慢速</button></div>
+    <input class="ans" id="in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="英文拼字"><div id="sp-msg"></div><button class="btn" id="go">送出答案</button><div id="st2"></div>`;
   const play=(r)=>{ window.speechSynthesis && speechSynthesis.cancel(); speak(w.w,{rate:r}); };
   $("#play").onclick=()=>play(0.8); $("#slow").onclick=()=>play(0.5); setTimeout(()=>play(0.8),250);
   const inp=$("#in"); inp.focus();
+  inp.onkeydown=e=>{ if(e.key==="Enter") e.preventDefault(); };   // 只用「送出答案」按鈕送出
+  const verdict=(ok, what)=>`<div class="verdict ${ok?"ok":"ng"}">${ok?"✅ 答對了！":"❌ 答錯了"}<span style="font-size:15px;font-weight:600">　${what}</span></div>`;
   const step1=()=>{
-    const v=inp.value; if(!v.trim()) return; inp.disabled=true; $("#go").remove();
+    const v=inp.value; if(!v.trim()){ $("#sp-msg").innerHTML=`<div class="fb warn">先打出拼字，再按「送出答案」。</div>`; return; }
+    inp.disabled=true; $("#go").remove(); $("#sp-msg").remove();
     res["V-SP"] = same(v, w.w, false);
-    $("#st2").innerHTML = `<div class="fb ${res["V-SP"]?"ok":"ng"}">${res["V-SP"]?"✅ 拼對了":"❌ 拼錯了"}${yourAnswer(v, w.w, res["V-SP"])}</div>
-      <h3>這個字的中文是？</h3><div class="opts">${zhOpts.map(z=>`<button class="opt" data-z="${esc(z)}">${esc(z)}</button>`).join("")}</div><div id="st3"></div>`;
+    $("#st2").innerHTML = `${verdict(res["V-SP"], "拼字")}${yourAnswer(v, w.w, res["V-SP"])}
+      <h3>第 2 步：這個字的中文是？</h3><div class="opts">${zhOpts.map(z=>`<button class="opt" data-z="${esc(z)}">${esc(z)}</button>`).join("")}</div><div id="zh-v"></div><div id="st3"></div>`;
     $("#st2").querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
       res["V-ZH"] = b.dataset.z===w.zh;
-      $("#st2").querySelectorAll(".opt").forEach(x=>{x.disabled=true; if(x.dataset.z===w.zh) x.classList.add("ok"); else if(x===b) x.classList.add("ng");});
+      $("#st2").querySelectorAll("[data-z]").forEach(x=>{x.disabled=true; if(x.dataset.z===w.zh) x.classList.add("ok"); else if(x===b) x.classList.add("ng");});
+      $("#zh-v").innerHTML = verdict(res["V-ZH"], res["V-ZH"] ? "中文" : `中文是「${esc(w.zh)}」`);
       if (!w.posq) return finish();
-      $("#st3").innerHTML = `<h3>詞性是？</h3><div class="opts" style="grid-template-columns:repeat(4,1fr)">${["n.","v.","adj.","adv."].map(p=>`<button class="opt" data-p="${p}">${p}</button>`).join("")}</div>`;
-      $("#st3").querySelectorAll(".opt").forEach(c=>c.onclick=()=>{
+      $("#st3").innerHTML = `<h3>第 3 步：詞性是？</h3><div class="opts" style="grid-template-columns:repeat(4,1fr)">${["n.","v.","adj.","adv."].map(p=>`<button class="opt" data-p="${p}">${p}</button>`).join("")}</div><div id="pos-v"></div>`;
+      $("#st3").querySelectorAll("[data-p]").forEach(c=>c.onclick=()=>{
         res["V-POS"] = c.dataset.p===w.pos;
-        $("#st3").querySelectorAll(".opt").forEach(x=>{x.disabled=true; if(x.dataset.p===w.pos) x.classList.add("ok"); else if(x===c) x.classList.add("ng");});
+        $("#st3").querySelectorAll("[data-p]").forEach(x=>{x.disabled=true; if(x.dataset.p===w.pos) x.classList.add("ok"); else if(x===c) x.classList.add("ng");});
+        const posZh={"n.":"名詞","v.":"動詞","adj.":"形容詞","adv.":"副詞"}[w.pos]||"";
+        $("#pos-v").innerHTML = verdict(res["V-POS"], res["V-POS"] ? "詞性" : `詞性是 ${w.pos}（${posZh}）`);
         finish();
       });
     });
@@ -545,7 +553,7 @@ function qSpell(q, box){
     const pl = w.pl ? `複數：${w.pl}` : (w.plr==="unc"?"不可數":"");
     afterAnswer(q, res, box, `<b>${esc(w.w)}</b> ${w.pos} ${esc(w.zh)}${pl?"｜"+pl:""}<span class="eg">${esc(w.ex)}　${esc(w.exz)}</span>`, "");
   };
-  $("#go").onclick=step1; inp.onkeydown=e=>{ if(e.key==="Enter") step1(); };
+  $("#go").onclick=step1;
 }
 function mechCheck(v){
   const t=norm(v), probs=[];
