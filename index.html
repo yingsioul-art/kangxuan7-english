@@ -487,7 +487,7 @@ const same = (a, b, keepApos) => squash(a, keepApos) === squash(b, keepApos);
 function yourAnswer(got, want, ok){
   const g = String(got||"").trim();
   const mine = !g ? '<span class="muted">（沒有作答）</span>' : ok ? `<span class="ya-ok">${esc(g)}</span>` : diffHTML(g, want);
-  const note = ok && g && norm(g)!==norm(want) ? `<div class="ya-note">✔ 算對（空格、標點、大小寫不影響）。標準寫法如下。</div>` : "";
+  const note = ok && g && norm(g)!==norm(want) ? `<div class="ya-note">✔ 算對（空格、標點、大小寫不影響）。標準寫法看上面的「正確答案」。</div>` : "";
   return `<div class="ya ${ok?"is-ok":"is-ng"}"><div class="ya-row"><span class="ya-lab">你寫的</span><span class="ya-val">${mine}</span></div>
     <div class="ya-row"><span class="ya-lab">正確答案</span><span class="ya-val"><b>${esc(want)}</b></span></div>${note}</div>`;
 }
