@@ -182,7 +182,7 @@ th:first-child,td:first-child{white-space:nowrap}
 .drag{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
 .dropzone .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
 .dropzone .opt.ng{border-color:var(--ng);background:var(--ng-soft)}
-.ghost{position:fixed;z-index:50;pointer-events:none;margin:0;transform:scale(1.08);box-shadow:var(--sh-2);background:var(--surface)!important;opacity:.95}
+.drag-ghost{position:fixed;z-index:50;pointer-events:none;margin:0;transform:scale(1.08);box-shadow:var(--sh-2);background:var(--surface)!important;opacity:.95}
 
 /* 作答 */
 .q{font-size:19px;line-height:1.7;font-weight:500}
@@ -714,7 +714,7 @@ function qOrder(q, box){
     let ghost=null;
     const move=ev=>{
       if (!ghost && Math.hypot(ev.clientX-sx, ev.clientY-sy) > 6){
-        ghost=c.cloneNode(true); ghost.classList.add("ghost"); document.body.appendChild(ghost); c.style.opacity=".3";
+        ghost=c.cloneNode(true); ghost.classList.add("drag-ghost"); document.body.appendChild(ghost); c.style.opacity=".3";
       }
       if (ghost){ ghost.style.left=(ev.clientX-ghost.offsetWidth/2)+"px"; ghost.style.top=(ev.clientY-ghost.offsetHeight/2)+"px";
         $("#ansrow").classList.toggle("over", !!document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("#ansrow")); }
