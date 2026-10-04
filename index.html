@@ -823,7 +823,7 @@ function vExam(){
 
 /* ───────── 老師講義（原題＋答案）───────── */
 function qBody(q){
-  if (q.t==="mc") return `${q.q}<div class="sub" style="margin-top:4px">${q.o.map((o,i)=>`(${"ABCD"[i]}) ${o}`).join("　")}</div>`;
+  if (q.t==="mc") return `${blankify(q.q)}<div class="sub" style="margin-top:4px">${q.o.map((o,i)=>`(${"ABCD"[i]}) ${o}`).join("　")}</div>`;
   if (q.t==="order") return q.zh;
   return blankify(q.q);
 }
@@ -843,7 +843,7 @@ function vTeacher(secId, mode){
     <div class="card">${qs.map((q,i)=>`<div class="line"><b class="sp">${i+1}</b><div style="flex:1">
       <div>${qBody(q)}</div>
       <button class="btn ghost small ans-btn">看答案</button>
-      <div class="ans" style="display:none"><div class="fb ok">✔ <b>${ansText(q)}</b>${q.t==="order"&&q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.t==="fill"&&q.a.length>1?`<span class="eg">也接受：${q.a.slice(1).map(esc).join("／")}</span>`:""}${q.x?`<span class="eg">💡 ${q.x}</span>`:""}</div></div>
+      <div class="ans" style="display:none"><div class="fb ok">✔ <b>${q.t==="mc"?`(${"ABCD"[q.a]}) `:""}${ansText(q)}</b>${q.t==="order"&&q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.t==="fill"&&q.a.length>1?`<span class="eg">也接受：${q.a.slice(1).map(esc).join("／")}</span>`:""}${q.x?`<span class="eg">💡 ${q.x}</span>`:""}</div></div>
     </div></div>`).join("")}</div>`, `#/${LS.id}/teacher`);
   app.querySelectorAll(".ans-btn").forEach(b=>b.onclick=()=>{ b.nextElementSibling.style.display="block"; b.remove(); });
   $("#all").onclick=()=>{ app.querySelectorAll(".ans").forEach(a=>a.style.display="block"); app.querySelectorAll(".ans-btn").forEach(b=>b.remove()); };
