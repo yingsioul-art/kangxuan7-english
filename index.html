@@ -157,6 +157,11 @@ th:first-child,td:first-child{white-space:nowrap}
 .wbi.ok{border-color:var(--ok);background:var(--ok-soft)}
 .wbi.ng{border-color:var(--ng);background:var(--ng-soft)}
 .wbp{font-size:20px;font-weight:700;padding-bottom:6px}
+/* 學生答案逐字母比對 */
+.yours{margin-top:8px;font-size:16px;line-height:1.9}
+.dword{font-weight:600;letter-spacing:.02em}
+.dbad{background:var(--ng-soft);color:var(--ng);text-decoration:line-through;border-radius:3px;padding:0 1px}
+.dmiss{color:var(--ng);border:1px dashed var(--ng);border-radius:3px;padding:0 2px;margin:0 1px}
 /* 句子解析 */
 .sxbox{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 16px 16px}
 .sxbox summary{font-weight:600;color:var(--accent);padding:8px 0}
@@ -448,6 +453,26 @@ function qMC(q, box){
     afterAnswer(q, m, box, q.x, q.o[i]);
   });
 }
+// 學生答案和正確答案逐字母比對：錯的字母標紅、漏掉的字母用紅色底線格補上
+function diffHTML(got, want){
+  got=String(got||""); want=String(want||"");
+  if (loose(got)===loose(want)) return `<span style="color:var(--ok);font-weight:600">${esc(got)}</span>`;
+  const a=got, b=want, n=a.length, m=b.length;
+  // LCS 對齊（字很短，直接 DP）
+  const dp=Array.from({length:n+1},()=>Array(m+1).fill(0));
+  for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--)
+    dp[i][j] = a[i].toLowerCase()===b[j].toLowerCase() ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  let i=0, j=0, out="";
+  while (i<n || j<m){
+    if (i<n && j<m && a[i].toLowerCase()===b[j].toLowerCase()){ out+=esc(a[i]); i++; j++; }
+    else if (j<m && (i>=n || dp[i][j+1]>=dp[i+1][j])){ out+=`<span class="dmiss">${esc(b[j])}</span>`; j++; }   // 漏掉的字母
+    else { out+=`<span class="dbad">${esc(a[i])}</span>`; i++; }                                              // 多打或打錯的字母
+  }
+  return `<span class="dword">${out}</span>`;
+}
+function yourAnswer(got, want){
+  return `<div class="yours">你寫的：${got.trim()?diffHTML(got, want):'<span class="muted">（沒有作答）</span>'}　→　正確：<b>${esc(want)}</b></div>`;
+}
 function blankify(s){ return s.replace(/___/g,'<span class="blank">&nbsp;</span>'); }
 function qFill(q, box){
   box.innerHTML = passageHTML(q)+`<div class="q">${blankify(q.q)}</div><input class="ans" id="in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="在這裡輸入"><button class="btn" id="go">確認</button>`;
@@ -462,7 +487,7 @@ function qFill(q, box){
       m.MECH=false; extra=`<div class="fb warn">⚠ 拼字對了，但大小寫要注意：<b>${esc(hit)}</b>。段考會扣分。</div>`;
     }
     const fs = q.set==="hand" ? fillSentence(q) : null;
-    afterAnswer(q, m, box, `${ok?"":`正確答案：<b>${esc(q.a[0])}</b><br>`}${q.x||""}${extra}${fs?explainHTML(fs.en, fs.zh):""}`, v);
+    afterAnswer(q, m, box, `${ok?`<div class="yours">你寫的：${diffHTML(v, hit)}</div>`:yourAnswer(v, q.a[0])}${q.x||""}${extra}${fs?explainHTML(fs.en, fs.zh):""}`, v);
   };
   $("#go").onclick=go; inp.onkeydown=e=>{ if(e.key==="Enter") go(); };
 }
@@ -479,7 +504,7 @@ function qSpell(q, box){
   const step1=()=>{
     const v=inp.value; if(!v.trim()) return; inp.disabled=true; $("#go").remove();
     res["V-SP"] = loose(v)===loose(w.w);
-    $("#st2").innerHTML = `<div class="fb ${res["V-SP"]?"ok":"ng"}">${res["V-SP"]?"✅ 拼對了：":"❌ 正確拼法："}<b>${esc(w.w)}</b></div>
+    $("#st2").innerHTML = `<div class="fb ${res["V-SP"]?"ok":"ng"}">${res["V-SP"]?"✅ 拼對了：<b>"+esc(w.w)+"</b>":"❌ 拼錯了"+yourAnswer(v, w.w)}</div>
       <h3>這個字的中文是？</h3><div class="opts">${zhOpts.map(z=>`<button class="opt" data-z="${esc(z)}">${esc(z)}</button>`).join("")}</div><div id="st3"></div>`;
     $("#st2").querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
       res["V-ZH"] = b.dataset.z===w.zh;
@@ -751,7 +776,10 @@ function qOrder(q, box){
       if (!okType){
         tries2++;
         const bad=oks.filter(x=>!x).length;
+        const mine=words.map((w,i)=>(vals[i]?(oks[i]?esc(vals[i]):diffHTML(vals[i], w.core)):'<span class="dmiss">＿</span>')+esc(w.p)).join(" ");
         $("#retry").innerHTML=`<div class="fb ng">❌ 有 ${bad} 格不對（紅色），改好再按送出。<b>要全部打對才能到下一題</b>。
+          <div class="yours">你寫的：${mine}</div>
+          <div class="muted" style="font-size:13px">紅底＝打錯或多打的字母；紅框＝漏掉的字母</div>
           ${tries2>=2?`<br>正確句子：<b>${esc(q.en)}</b>`:"<br><span class='muted'>再錯一次會顯示正確句子。</span>"}</div>`;
         const firstBad=boxes.find((b,i)=>!oks[i]); firstBad.focus(); firstBad.select(); return;
       }
