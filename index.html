@@ -786,7 +786,7 @@ function qOrder(q, box){
     why.push(`這句是「${tn}」：${tr}`);
     $("#p1fb").innerHTML=`<div class="verdict ng">❌ 答錯了（第 ${tries} 次）</div>
       <div class="fb ng" style="margin-top:8px">${why.map(x=>`<div>・${x}</div>`).join("")}<div style="margin-top:8px"><b>把紅色的字卡拖曳調整好，再按「送出」。</b></div></div>`;
-    if (tries>=3 && !$("#peek")){
+    if (!$("#peek")){   // 答錯一次就能看正確順序（使用者 10/4 要求：不要卡著看不到答案）
       $("#p1btns").insertAdjacentHTML("beforeend", `<button class="btn ghost" id="peek">👀 看正確順序</button>`);
       $("#peek").onclick=()=>{ $("#p1fb").insertAdjacentHTML("beforeend", `<div class="fb warn reveal">正確順序：<b>${esc(q.en)}</b>　照著排好再按送出。</div>`); $("#peek").remove(); };
     }
@@ -822,10 +822,11 @@ function qOrder(q, box){
         tries2++;
         const bad=oks.filter(x=>!x).length;
         const mine=words.map((w,i)=>(vals[i]?(oks[i]?esc(vals[i]):diffHTML(vals[i], w.core)):'<span class="dmiss">＿</span>')+esc(w.p)).join(" ");
-        $("#retry").innerHTML=`<div class="fb ng">❌ 有 ${bad} 格不對（紅色），改好再按送出。<b>要全部打對才能到下一題</b>。
-          <div class="yours">你寫的：${mine}</div>
-          <div class="muted" style="font-size:13px">紅底＝打錯或多打的字母；紅框＝漏掉的字母</div>
-          ${tries2>=2?`<br>正確句子：<b>${esc(q.en)}</b>`:"<br><span class='muted'>再錯一次會顯示正確句子。</span>"}</div>`;
+        // 答錯立刻給看正確句子（兩行大字對照），看著把紅色格子改好再送出
+        $("#retry").innerHTML=`<div class="verdict ng">❌ 答錯了（第 ${tries2} 次）：有 ${bad} 格不對</div>
+          <div class="ya is-ng"><div class="ya-row"><span class="ya-lab">你寫的</span><span class="ya-val">${mine}</span></div>
+          <div class="ya-row"><span class="ya-lab">正確答案</span><span class="ya-val"><b>${esc(q.en)}</b></span></div></div>
+          <div class="muted" style="font-size:13px">紅底＝打錯或多打的字母；紅框＝漏掉的字母。<b>把紅色格子改好，再按「送出」</b>。</div>`;
         const firstBad=boxes.find((b,i)=>!oks[i]); firstBad.focus(); firstBad.select(); return;
       }
       boxes.forEach(b=>b.disabled=true); $("#go").remove(); $("#retry").remove();
