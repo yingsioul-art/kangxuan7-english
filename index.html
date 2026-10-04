@@ -551,7 +551,10 @@ function qSpell(q, box){
   };
   const finish=()=>{
     const pl = w.pl ? `複數：${w.pl}` : (w.plr==="unc"?"不可數":"");
-    afterAnswer(q, res, box, `<b>${esc(w.w)}</b> ${w.pos} ${esc(w.zh)}${pl?"｜"+pl:""}<span class="eg">${esc(w.ex)}　${esc(w.exz)}</span>`, "");
+    const mark = k => res[k]===undefined ? "" : res[k] ? "✅" : "❌";
+    const sum = `<div class="row" style="gap:16px;font-size:16px;font-weight:600;margin-bottom:8px">
+      <span>拼字 ${mark("V-SP")}</span><span>中文 ${mark("V-ZH")}</span>${w.posq?`<span>詞性 ${mark("V-POS")}</span>`:""}</div>`;
+    afterAnswer(q, res, box, `${sum}<b>${esc(w.w)}</b> ${w.pos} ${esc(w.zh)}${pl?"｜"+pl:""}<span class="eg">${esc(w.ex)}　${esc(w.exz)}</span>`, "");
   };
   $("#go").onclick=step1;
 }
