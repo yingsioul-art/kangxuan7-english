@@ -472,7 +472,7 @@ function qOrder(q, box){
     "children.":"childs.",women:"womans",men:"mans","cousins.":"cousin.","doctors.":"doctor."};
   const dis = shuffle(toks.filter(t=>CONF[t] && !toks.includes(CONF[t])).map(t=>CONF[t])).slice(0,2);
   let pool = shuffle(toks.concat(dis).map((t,i)=>({t,i}))), ans=[];
-  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：點字卡排出正確順序（有 1–2 張是多出來的干擾卡）</div>
+  box.innerHTML = `<div class="q">${q.zh}</div><div class="sub">第 1 步：點字卡排出正確順序（可能有多出來的干擾卡）</div>
     <div class="chips dropzone" id="ansrow"></div><div class="chips" id="poolrow"></div>
     <button class="btn" id="chk">檢查順序</button><div id="ph2"></div>`;
   const draw=()=>{
