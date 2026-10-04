@@ -726,6 +726,10 @@ function qOrder(q, box){
     $("#chk").remove(); $("#poolrow").remove();
     // 第 2 步：一個字一個空格（格子長短＝字的長短），標點已經印好；空白鍵、Enter 都不會跳格或送出，只有按「送出」才批改
     const words = q.en.split(" ").map(w=>{ const m=w.match(/^(.*?)([,.?!]*)$/); return {core:m[1], p:m[2]}; });
+    // 第 1 步顯示過的正確順序先模糊，避免直接照抄；點一下可以偷看
+    const p1=$("#ph2").firstElementChild;
+    if (p1){ p1.style.filter="blur(6px)"; p1.style.cursor="pointer"; p1.title="點一下偷看";
+      p1.onclick=()=>{ p1.style.filter = p1.style.filter ? "" : "blur(6px)"; }; }
     $("#ph2").insertAdjacentHTML("beforeend", `<div class="sub" style="margin-top:16px">第 2 步：${good?"排對了！":""}不看字卡，在每個空格打一個字（注意大寫）。打完按「送出」。</div>
       <div class="wb" id="wb">${words.map((w,i)=>`<span class="wbw"><input class="wbi" data-i="${i}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
         style="width:calc(${Math.max(2,w.core.length)}ch + 24px)"><span class="wbp">${esc(w.p)}</span></span>`).join("")}</div>
