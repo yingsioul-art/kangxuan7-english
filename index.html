@@ -514,7 +514,7 @@ function vHome(){
     ${tile("📒","Review 1","製作中","",true)}
     ${tile("🎯","我的弱點","依觀念統計，弱的先練","#/weak")}
     ${tile("📕","錯題本",`${nW} 題（連對兩次畢業）`,"#/wrong")}
-    ${tile("📝","段考模擬","照丹鳳七上第一次段考題型","#/exam")}
+    ${tile("📝","段考模擬","照七上第一次段考題型","#/exam")}
   </div>
   <p class="sub" style="margin-top:20px">發音用瀏覽器內建語音，建議用 Chrome 或 Safari。手機可以「加到主畫面」當 app 用，離線也能練。</p>`);
 }
@@ -677,7 +677,7 @@ function vWrong(){
   const g=$("#go"); if(g) g.onclick=()=>startQuiz({title:"錯題本複習", qs:shuffle(list.map(x=>x.q)).slice(0,16), checkpoint:true, back:"#/wrong"});
 }
 function vExam(){
-  page("📝 段考模擬", `<div class="card"><p>照丹鳳七上第一次段考（113 學年卷為主）的題型和配分：</p>
+  page("📝 段考模擬", `<div class="card"><p>照歷屆七上第一次段考（113 學年卷為主）的題型和配分：</p>
     <table><tr><th>大題</th><th>題數</th><th>配分</th></tr>
     <tr><td>聽力</td><td>${D.exam.listen}</td><td>30%</td></tr><tr><td>綜合選擇</td><td>${D.exam.mc}</td><td>40%</td></tr>
     <tr><td>閱讀</td><td>${D.exam.read}</td><td>20%</td></tr><tr><td>手寫</td><td>${D.exam.hand}</td><td>10%</td></tr></table>
