@@ -158,7 +158,15 @@ th:first-child,td:first-child{white-space:nowrap}
 .wbi.ng{border-color:var(--ng);background:var(--ng-soft)}
 .wbp{font-size:20px;font-weight:700;padding-bottom:6px}
 /* 學生答案逐字母比對 */
-.yours{margin-top:8px;font-size:16px;line-height:1.9}
+.yours{margin-top:8px;font-size:18px;line-height:1.9}
+.ya{margin:16px 0 8px;border-radius:var(--r-md);overflow:hidden;border:2px solid var(--line);background:var(--surface)}
+.ya.is-ok{border-color:var(--ok)} .ya.is-ng{border-color:var(--ng)}
+.ya-row{display:flex;align-items:baseline;gap:16px;padding:12px 16px}
+.ya-row+.ya-row{border-top:1px solid var(--line);background:var(--surface-2)}
+.ya-lab{flex:none;width:64px;font-size:13px;font-weight:600;color:var(--ink-3)}
+.ya-val{font-size:22px;font-weight:600;line-height:1.5;word-break:break-word}
+.ya-ok{color:var(--ok)}
+.ya-note{padding:8px 16px;font-size:13px;color:var(--ok);background:var(--ok-soft)}
 .dword{font-weight:600;letter-spacing:.02em}
 .dbad{background:var(--ng-soft);color:var(--ng);text-decoration:line-through;border-radius:3px;padding:0 1px}
 .dmiss{color:var(--ng);border:1px dashed var(--ng);border-radius:3px;padding:0 2px;margin:0 1px}
@@ -396,7 +404,8 @@ function record(q, okByConcept){ // okByConcept: {code: bool}
   for (const [c,ok] of Object.entries(okByConcept)){
     const s = S.stats[c] || (S.stats[c]={n:0,w:0}); s.n++; if(!ok) s.w++;
   }
-  const allOk = Object.values(okByConcept).every(Boolean);
+  // 大小寫標點（MECH）只提醒、另外記統計，不影響這題的對錯
+  const allOk = Object.entries(okByConcept).filter(([c])=>c!=="MECH").every(([,v])=>v);
   if (!allOk){ S.wrong[q.id] = {q, s:0}; }
   else if (S.wrong[q.id]){ S.wrong[q.id].s++; if (S.wrong[q.id].s>=2) delete S.wrong[q.id]; }
   save(); return allOk;
@@ -470,8 +479,17 @@ function diffHTML(got, want){
   }
   return `<span class="dword">${out}</span>`;
 }
-function yourAnswer(got, want){
-  return `<div class="yours">你寫的：${got.trim()?diffHTML(got, want):'<span class="muted">（沒有作答）</span>'}　→　正確：<b>${esc(want)}</b></div>`;
+// 比對時忽略空格、大小寫和標點；撇號只有「所有格」題才算（girls'、its／it's 是考點）
+const squash = (s, keepApos) => String(s||"").toLowerCase().replace(/[’‘`]/g,"'")
+  .replace(keepApos ? /[\s.,!?;:"“”]/g : /[\s.,!?;:"“”']/g, "");
+const same = (a, b, keepApos) => squash(a, keepApos) === squash(b, keepApos);
+// 學生答案＋正確答案：兩行大字對照，答對答錯都顯示
+function yourAnswer(got, want, ok){
+  const g = String(got||"").trim();
+  const mine = !g ? '<span class="muted">（沒有作答）</span>' : ok ? `<span class="ya-ok">${esc(g)}</span>` : diffHTML(g, want);
+  const note = ok && g && norm(g)!==norm(want) ? `<div class="ya-note">✔ 算對（空格、標點、大小寫不影響）。標準寫法如下。</div>` : "";
+  return `<div class="ya ${ok?"is-ok":"is-ng"}"><div class="ya-row"><span class="ya-lab">你寫的</span><span class="ya-val">${mine}</span></div>
+    <div class="ya-row"><span class="ya-lab">正確答案</span><span class="ya-val"><b>${esc(want)}</b></span></div>${note}</div>`;
 }
 function blankify(s){ return s.replace(/___/g,'<span class="blank">&nbsp;</span>'); }
 function qFill(q, box){
@@ -479,15 +497,17 @@ function qFill(q, box){
   const inp=$("#in"); inp.focus();
   const go=()=>{
     const v=inp.value; if(!v.trim()) return; inp.disabled=true; $("#go").remove();
-    const hit = q.a.find(a=>loose(a)===loose(v));
+    const kp = q.c.includes("POSS");
+    const hit = q.a.find(a=>same(a, v, kp));
     const ok = !!hit;
     const m={}; q.c.forEach(c=>m[c]=ok);
     let extra="";
-    if (ok && q.c.includes("MECH") && norm(v.replace(/[.?!]$/,""))!==norm(hit.replace(/[.?!]$/,""))){
-      m.MECH=false; extra=`<div class="fb warn">⚠ 拼字對了，但大小寫要注意：<b>${esc(hit)}</b>。段考會扣分。</div>`;
+    // 大小寫不對：算對，只提醒（MECH 另外記，不影響對錯）
+    if (ok && /[A-Z]/.test(hit) && norm(v).replace(/[.?!]$/,"")!==norm(hit).replace(/[.?!]$/,"") && v.trim()[0]!==hit[0]){
+      m.MECH=false; extra=`<div class="fb warn">⚠ 字對了，但大小寫要注意：<b>${esc(hit)}</b>。段考會扣分。</div>`;
     }
     const fs = q.set==="hand" ? fillSentence(q) : null;
-    afterAnswer(q, m, box, `${ok?`<div class="yours">你寫的：${diffHTML(v, hit)}</div>`:yourAnswer(v, q.a[0])}${q.x||""}${extra}${fs?explainHTML(fs.en, fs.zh):""}`, v);
+    afterAnswer(q, m, box, `${yourAnswer(v, hit||q.a[0], ok)}${q.x||""}${extra}${fs?explainHTML(fs.en, fs.zh):""}`, v);
   };
   $("#go").onclick=go; inp.onkeydown=e=>{ if(e.key==="Enter") go(); };
 }
@@ -503,8 +523,8 @@ function qSpell(q, box){
   const inp=$("#in"); inp.focus();
   const step1=()=>{
     const v=inp.value; if(!v.trim()) return; inp.disabled=true; $("#go").remove();
-    res["V-SP"] = loose(v)===loose(w.w);
-    $("#st2").innerHTML = `<div class="fb ${res["V-SP"]?"ok":"ng"}">${res["V-SP"]?"✅ 拼對了：<b>"+esc(w.w)+"</b>":"❌ 拼錯了"+yourAnswer(v, w.w)}</div>
+    res["V-SP"] = same(v, w.w, false);
+    $("#st2").innerHTML = `<div class="fb ${res["V-SP"]?"ok":"ng"}">${res["V-SP"]?"✅ 拼對了":"❌ 拼錯了"}${yourAnswer(v, w.w, res["V-SP"])}</div>
       <h3>這個字的中文是？</h3><div class="opts">${zhOpts.map(z=>`<button class="opt" data-z="${esc(z)}">${esc(z)}</button>`).join("")}</div><div id="st3"></div>`;
     $("#st2").querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
       res["V-ZH"] = b.dataset.z===w.zh;
@@ -769,7 +789,8 @@ function qOrder(q, box){
     const go=()=>{
       const vals=boxes.map(b=>b.value.trim());
       if (vals.every(v=>!v)) { $("#retry").innerHTML=`<div class="fb warn">先在格子裡打字，再按送出。</div>`; return; }
-      const oks=vals.map((v,i)=>loose(v)===loose(words[i].core));
+      const kp=q.c.includes("POSS");
+      const oks=vals.map((v,i)=>same(v, words[i].core, kp));
       const okType=oks.every(Boolean);
       if (firstOk===undefined) firstOk=okType;
       boxes.forEach((b,i)=>{ b.classList.toggle("ok",oks[i]); b.classList.toggle("ng",!oks[i]); });
@@ -790,7 +811,7 @@ function qOrder(q, box){
       const p=mechCheck(v); if(p.length){ m.MECH=false; extra=`<div class="fb warn">⚠ 字都對了，但${p.join("、")}。段考會扣分。</div>`; } else m.MECH=true;
       const zh = (q.set==="best" || q.tsec==="best") ? q.zh : "";
       if (document.activeElement) document.activeElement.blur();   // 避免空白鍵直接觸發「下一題」
-      afterAnswer(q, m, box, `${firstOk?"":"練到正確了！第一次答錯，已收進錯題本。<br>"}<b>${esc(q.en)}</b>${q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.x?"<br>"+q.x:""}${extra}${explainHTML(q.en, zh)}`, v);
+      afterAnswer(q, m, box, `${firstOk?"":"練到正確了！第一次答錯，已收進錯題本。"}${yourAnswer(v, q.en, true)}${q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.x?"<br>"+q.x:""}${extra}${explainHTML(q.en, zh)}`, v);
     };
     $("#go").onclick=go;
   };
