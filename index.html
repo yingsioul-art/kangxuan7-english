@@ -147,6 +147,16 @@ th:first-child,td:first-child{white-space:nowrap}
 .dropzone{background:var(--surface-2);border-radius:var(--r-md);padding:8px;margin:16px 0 8px;min-height:64px;align-items:center}
 .dropzone .opt{background:var(--surface);box-shadow:var(--sh-1);border-color:transparent}
 .dropzone.over{outline:2px dashed var(--accent);outline-offset:2px}
+/* 句子打字：一字一格 */
+.wb{display:flex;flex-wrap:wrap;gap:8px 8px;align-items:flex-end;margin:16px 0 8px}
+.wbw{display:inline-flex;align-items:flex-end;gap:2px}
+.wbi{font:inherit;font-size:18px;padding:8px 4px;min-width:40px;text-align:center;border:0;border-bottom:2px solid var(--ink-3);
+  border-radius:var(--r-sm) var(--r-sm) 0 0;background:var(--surface-2);color:var(--ink);outline:none;
+  transition:border-color .2s var(--ease),background .2s var(--ease)}
+.wbi:focus{border-color:var(--accent);background:var(--accent-soft)}
+.wbi.ok{border-color:var(--ok);background:var(--ok-soft)}
+.wbi.ng{border-color:var(--ng);background:var(--ng-soft)}
+.wbp{font-size:20px;font-weight:700;padding-bottom:6px}
 /* 句子解析 */
 .sxbox{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 16px 16px}
 .sxbox summary{font-weight:600;color:var(--accent);padding:8px 0}
@@ -255,6 +265,9 @@ async function speakTalk(script){
   }
 }
 function sayBtn(text){ return `<button class="say" data-say="${esc(text)}" aria-label="播放">🔊</button>`; }
+// 空白鍵不觸發按鈕（避免按空白就直接衝到下一題）
+["keydown","keyup"].forEach(t=>document.addEventListener(t, e=>{
+  if (e.key===" " && e.target.tagName==="BUTTON") e.preventDefault(); }, true));
 document.addEventListener("click", e=>{
   const b = e.target.closest("[data-say]"); if (!b) return;
   if ("speechSynthesis" in window) speechSynthesis.cancel();
@@ -711,34 +724,43 @@ function qOrder(q, box){
     }
     locked=true;
     $("#chk").remove(); $("#poolrow").remove();
-    $("#ph2").insertAdjacentHTML("beforeend", `<div class="sub" style="margin-top:16px">第 2 步：${good?"排對了！":""}現在不看字卡，自己打出完整句子（注意大小寫和標點）</div>
-      <input class="ans" id="in" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="go">確認</button>`);
+    // 第 2 步：一個字一個空格（格子長短＝字的長短），標點已經印好；空白鍵、Enter 都不會跳格或送出，只有按「送出」才批改
+    const words = q.en.split(" ").map(w=>{ const m=w.match(/^(.*?)([,.?!]*)$/); return {core:m[1], p:m[2]}; });
+    $("#ph2").insertAdjacentHTML("beforeend", `<div class="sub" style="margin-top:16px">第 2 步：${good?"排對了！":""}不看字卡，在每個空格打一個字（注意大寫）。打完按「送出」。</div>
+      <div class="wb" id="wb">${words.map((w,i)=>`<span class="wbw"><input class="wbi" data-i="${i}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+        style="width:calc(${Math.max(2,w.core.length)}ch + 24px)"><span class="wbp">${esc(w.p)}</span></span>`).join("")}</div>
+      <div id="retry"></div><button class="btn" id="go">送出</button>`);
     $("#ansrow").style.opacity=".25"; $("#ansrow").style.filter="blur(5px)";
-    const inp=$("#in"); inp.focus();
+    const boxes=[...box.querySelectorAll(".wbi")];
+    boxes.forEach(b=>b.addEventListener("keydown", e=>{ if (e.key===" " || e.key==="Enter") e.preventDefault(); }));
+    boxes.forEach(b=>b.addEventListener("input", ()=>{ if (/\s/.test(b.value)) b.value=b.value.replace(/\s+/g,""); b.classList.remove("ok","ng"); }));
+    boxes[0].focus();
     // 打錯要一直練到打對才能下一題；弱點統計只記第一次的對錯
     let firstOk, tries2=0;
-    inp.insertAdjacentHTML("afterend", `<div id="retry"></div>`);
     const go=()=>{
-      const v=inp.value; if(!v.trim()) return;
-      const okType = [q.en,...q.alt].some(a=>loose(a)===loose(v));
+      const vals=boxes.map(b=>b.value.trim());
+      if (vals.every(v=>!v)) { $("#retry").innerHTML=`<div class="fb warn">先在格子裡打字，再按送出。</div>`; return; }
+      const oks=vals.map((v,i)=>loose(v)===loose(words[i].core));
+      const okType=oks.every(Boolean);
       if (firstOk===undefined) firstOk=okType;
+      boxes.forEach((b,i)=>{ b.classList.toggle("ok",oks[i]); b.classList.toggle("ng",!oks[i]); });
       if (!okType){
         tries2++;
-        // 逐字比對：標出打錯的字
-        const want=q.en.split(" "), got=v.trim().split(/\s+/);
-        const marked=got.map((w,i)=>loose(w)===loose(want[i]||"")?esc(w):`<span style="color:var(--ng);text-decoration:underline">${esc(w)}</span>`).join(" ");
-        $("#retry").innerHTML=`<div class="fb ng">❌ 還不對，<b>要打對才能到下一題</b>（第 ${tries2} 次）。<br>你打的：${marked}${got.length<want.length?`　<span class="muted">（少了 ${want.length-got.length} 個字）</span>`:""}
-          ${tries2>=1?`<br>正確句子：<b>${esc(q.en)}</b>`:""}</div>`;
-        inp.focus(); inp.select(); return;
+        const bad=oks.filter(x=>!x).length;
+        $("#retry").innerHTML=`<div class="fb ng">❌ 有 ${bad} 格不對（紅色），改好再按送出。<b>要全部打對才能到下一題</b>。
+          ${tries2>=2?`<br>正確句子：<b>${esc(q.en)}</b>`:"<br><span class='muted'>再錯一次會顯示正確句子。</span>"}</div>`;
+        const firstBad=boxes.find((b,i)=>!oks[i]); firstBad.focus(); firstBad.select(); return;
       }
-      inp.disabled=true; $("#go").remove(); $("#retry").remove();
+      boxes.forEach(b=>b.disabled=true); $("#go").remove(); $("#retry").remove();
+      const v=words.map((w,i)=>vals[i]+w.p).join(" ");
       const m={}; q.c.forEach(c=>m[c]=phase1ok && firstOk);
       let extra="";
-      const p=mechCheck(v); if(p.length){ m.MECH=false; extra=`<div class="fb warn">⚠ 句子對了，但${p.join("、")}。段考會扣分。</div>`; } else m.MECH=true;
+      const p=mechCheck(v); if(p.length){ m.MECH=false; extra=`<div class="fb warn">⚠ 字都對了，但${p.join("、")}。段考會扣分。</div>`; } else m.MECH=true;
       const zh = (q.set==="best" || q.tsec==="best") ? q.zh : "";
+      if (document.activeElement) document.activeElement.blur();   // 避免空白鍵直接觸發「下一題」
       afterAnswer(q, m, box, `${firstOk?"":"練到正確了！第一次答錯，已收進錯題本。<br>"}<b>${esc(q.en)}</b>${q.alt.length?`<span class="eg">也可以：${q.alt.map(esc).join("／")}</span>`:""}${q.x?"<br>"+q.x:""}${extra}${explainHTML(q.en, zh)}`, v);
     };
-    $("#go").onclick=go; inp.onkeydown=e=>{ if(e.key==="Enter") go(); };
+    $("#go").onclick=go;
   };
 }
 function qListen(q, box){
